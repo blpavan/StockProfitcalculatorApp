@@ -1,7 +1,7 @@
-    Stock Profit Calculator Application
+Stock Profit Calculator Application
 
 Overview:
-This is a command-line Java application that calculates the maximum profit for a company's stock in a given year based on historical stock price data from CSV files.
+This command-line Java application calculates the maximum profit for a company's stock in a given year based on historical stock price data from CSV files.
 
 Prerequisites (Ensure the following software is installed on your machine):
 Java JDK 17 or higher
@@ -24,7 +24,7 @@ Project Structure (The key components of the project):
 StockProfitCalculatorService: Contains the logic for calculating the maximum profit based on CSV data.
 StockPriceResourceObject: Holds stock-related information such as buy date, sell date, buy price, sell price, and profit.
 StockProfitCalculatorServiceTest: Contains unit tests for the application.
-CSV file format: The stock data should be in CSV format with the following columns: Date,Open,High,Low,Close,Volume.
+CSV file format: The stock data should be in CSV format with the following columns: Date, Open, High, Low, Close, Volume.
 
 How to Build and Run:
 
