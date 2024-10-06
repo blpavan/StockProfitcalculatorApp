@@ -1,5 +1,8 @@
 Stock Profit Calculator Application
 
+Author: Lakshman Pavan Kumar Bodapati
+SourceCode (git repo) -> https://github.com/blpavan/StockProfitcalculatorApp
+
 Overview:
 This command-line Java application calculates the maximum profit for a company's stock in a given year based on historical stock price data from CSV files.
 
