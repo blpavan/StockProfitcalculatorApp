@@ -51,8 +51,8 @@ public class StockProfitCalculatorApplication implements CommandLineRunner {
 			throw new IllegalArgumentException("Error: Invalid Year");
 		}
 
-        logger.info("Provided Input Arguments are stock name: {}, Provided year: {}", stockName, year);
-
+        //logger.info("Provided Input Arguments are stock name: {}, Provided year: {}", stockName, year);
+		System.out.println("Provided Input Arguments are stock name: " + stockName + ", Provided year: " + year);
 		try {
 			StockPriceResourceObject resourceObject = stockProfitCalculatorService.maxProfit(stockName, year);
 			printResultFields(resourceObject);

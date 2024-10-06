@@ -5,7 +5,6 @@ import com.stockprice.models.StockPriceResourceObject;
 import com.opencsv.CSVReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.ComponentScan;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
@@ -32,14 +31,14 @@ public class StockProfitCalculatorService {
      * Calculates the stock profit based on the provided stock Name and year.
      *
      * @param stockName the symbol of the stock to calculate profit for
-     * @param year        the year for which the profit is to be calculated
+     * @param year      the year for which the profit is to be calculated
      * @return a StockPriceResourceObject containing the calculated stock price details for the given stockName and Year
-     * @throws IllegalArgumentException if the stock Name or year is invalid
+     * @throws FileNotFoundException if the CSV file for the stock cannot be found
      */
     public StockPriceResourceObject maxProfit(String stockName, int year) throws FileNotFoundException {
 
         String csvFileName = stockName.toUpperCase() + ".csv";
-        Resource resource = null;
+        Resource resource;
         try {
             resource = resourceLoader.getResource(csvFileName);
             if(!resource.exists()) {
@@ -51,10 +50,17 @@ public class StockProfitCalculatorService {
 
         StockPriceResourceObject stockPriceResourceObject = new StockPriceResourceObject();
 
-        double minPrice = Double.MAX_VALUE;
+        double initialLowPrice = Double.MAX_VALUE;
+        String initialBuyDate = "";
+
         String buyDate = "";
         String sellDate = "";
-        double maxProfit = 0;
+        double sellPrice = 0.0;
+        double buyPrice = 0.0;
+        double maxProfit = 0.0;
+
+        String currentBuyDate;
+        String currentSellDate;
 
 
         try (InputStream inputStream = resource.getInputStream();
@@ -66,43 +72,63 @@ public class StockProfitCalculatorService {
                 throw new IllegalArgumentException("CSV file is empty or missing header");
             }
 
+
             while ((nextLine = reader.readNext()) != null) {
                 String dateStr = nextLine[0];
-                double openPrice = Double.parseDouble(nextLine[1]);
-                double closingPrice = Double.parseDouble(nextLine[4]);
 
                 int currentYear = Integer.parseInt(dateStr.split("-")[0]);
 
-                if(currentYear == year) {
-                    if (openPrice < minPrice) {
-                        minPrice = openPrice;
-                        buyDate = dateStr;
+                if (currentYear == year) {
+                    initialBuyDate = dateStr;
+                    initialLowPrice = Double.parseDouble(nextLine[3]);
+                    break;
+                }
+            }
+
+            while ((nextLine = reader.readNext()) != null) {
+                String dateStr = nextLine[0];
+                int currentYear = Integer.parseInt(dateStr.split("-")[0]);
+
+                if (currentYear == year && !dateStr.equals(initialBuyDate)) {
+                    double currHighPrice = Double.parseDouble(nextLine[2]);
+                    double currLowPrice = Double.parseDouble(nextLine[3]);
+                    currentBuyDate = dateStr;
+                    currentSellDate = dateStr;
+
+                    double profit = currHighPrice - initialLowPrice;
+                    if (profit > maxProfit) {
+                        maxProfit = profit;
+                        sellDate = currentSellDate;
+                        buyDate = initialBuyDate;
+                        sellPrice = currHighPrice;
+                        buyPrice = initialLowPrice;
                     }
 
-                    double potentialProfit = closingPrice - minPrice;
-                    if (potentialProfit > maxProfit) {
-                        maxProfit = potentialProfit;
-                        sellDate = dateStr;
+                    if (currLowPrice < initialLowPrice) {
+                        initialLowPrice = currLowPrice;
+                        initialBuyDate = currentBuyDate;
                     }
                 }
             }
-            if(maxProfit > 0) {
+
+            if(maxProfit > 0.0) {
                 stockPriceResourceObject.setBuyDate(LocalDate.parse(buyDate));
-                stockPriceResourceObject.setBuyPrice(minPrice);
+                stockPriceResourceObject.setBuyPrice(buyPrice);
                 stockPriceResourceObject.setSellDate(LocalDate.parse(sellDate));
-                stockPriceResourceObject.setSellPrice(minPrice + maxProfit);
+                stockPriceResourceObject.setSellPrice(sellPrice);
                 stockPriceResourceObject.setProfit(maxProfit);
             }
             else {
                 logger.info("No profit for {} in {}", stockName, year);
+                stockPriceResourceObject.setBuyDate(LocalDate.parse(initialBuyDate));
+                stockPriceResourceObject.setBuyPrice(initialLowPrice);
+                stockPriceResourceObject.setSellDate(null);
+                stockPriceResourceObject.setSellPrice(null);
                 stockPriceResourceObject.setProfit(0.0);
             }
         }
         catch (IOException | CsvValidationException e) {
             logger.error("Error processing CSV file", e);
-        }
-        catch (NumberFormatException e) {
-            throw new NumberFormatException("Invalid number format in CSV file");
         }
     return stockPriceResourceObject;
     }

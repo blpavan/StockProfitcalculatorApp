@@ -6,7 +6,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.slf4j.Logger;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
@@ -25,8 +24,6 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 public class StockProfitCalculatorServiceTest {
     @Mock
-    private Logger logger;
-    @Mock
     private ResourceLoader resourceLoader;
     @Mock
     private Resource resource;
@@ -37,7 +34,7 @@ public class StockProfitCalculatorServiceTest {
 
 
     @Test
-    void testMaxProfitWhenNoFileFound() throws Exception {
+    void testMaxProfitWhenNoFileFound(){
         assertThrows(FileNotFoundException.class,() ->  stockProfitCalculatorService.maxProfit("RANDOM", 2014));
     }
 
@@ -56,16 +53,14 @@ public class StockProfitCalculatorServiceTest {
         when(resourceLoader.getResource(anyString())).thenReturn(resource);
         when(resource.exists()).thenReturn(false); // Simulating that the resource does not exist
 
-        FileNotFoundException thrown = assertThrows(FileNotFoundException.class, () -> {
-            stockProfitCalculatorService.maxProfit(stockName, year);
-        });
+        FileNotFoundException thrown = assertThrows(FileNotFoundException.class, () -> stockProfitCalculatorService.maxProfit(stockName, year));
 
         assertEquals("File not found: " + csvFileName, thrown.getMessage());
     }
 
     @Test
     void testMaxProfitWithEmptyCSV() throws Exception {
-        String emptyCSVContent = ""; // Empty content
+        String emptyCSVContent = "";
         InputStream inputStream = new ByteArrayInputStream(emptyCSVContent.getBytes());
 
         Resource mockResource = mock(Resource.class);
@@ -73,18 +68,19 @@ public class StockProfitCalculatorServiceTest {
         when(mockResource.getInputStream()).thenReturn(inputStream);
         when(resourceLoader.getResource(anyString())).thenReturn(mockResource);
 
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            stockProfitCalculatorService.maxProfit("AAPL", 2023);
-        });
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> stockProfitCalculatorService.maxProfit("AAPL", 2023));
 
         assertTrue(exception.getMessage().contains("CSV file is empty"));
     }
 
     @Test
-    void testMaxProfitWithInvalidDataTypes() throws Exception {
-        String csvContent = "Date,Open,High,Low,Close\n" +
-                "2023-01-01,invalid,105.0,99.0,102.0\n" +
-                "2023-01-02,102.0,110.0,101.0,108.0\n";
+    void testMaxProfitValidScenarioWithProfit() throws Exception {
+        String csvContent = """
+                Date,Open,High,Low,Close
+                2023-01-01,100.0,105.0,99.0,102.0
+                2023-01-02,102.0,110.0,101.0,108.0
+                2023-01-03,108.0,115.0,107.0,111.0
+                """;
 
         InputStream inputStream = new ByteArrayInputStream(csvContent.getBytes());
 
@@ -93,18 +89,23 @@ public class StockProfitCalculatorServiceTest {
         when(mockResource.getInputStream()).thenReturn(inputStream);
         when(resourceLoader.getResource(anyString())).thenReturn(mockResource);
 
-        assertThrows(NumberFormatException.class, () -> {
-            stockProfitCalculatorService.maxProfit("AAPL", 2023);
-        });
+        StockPriceResourceObject result = stockProfitCalculatorService.maxProfit("csvContent", 2023);
+
+        assertNotNull(result);
+        assertEquals(99.0, result.getBuyPrice(), 0.0001);
+        assertEquals(115.0, result.getSellPrice(), 0.0001);
+        assertEquals(16.0, result.getProfit(), 0.0001); // Max profit = 115 - 99 = 16
+        assertEquals("2023-01-03", result.getSellDate().toString());
     }
 
-
     @Test
-    void testMaxProfitValidScenario() throws Exception {
-        String csvContent = "Date,Open,High,Low,Close\n" +
-                "2023-01-01,100.0,105.0,99.0,102.0\n" +
-                "2023-01-02,102.0,110.0,101.0,108.0\n" +
-                "2023-01-03,108.0,115.0,107.0,111.0\n";
+    void testMaxProfitValidScenarioWithNoProfit() throws Exception {
+        String csvContent = """
+                Date,Open,High,Low,Close
+                2023-01-01,100.0,105.0,99.0,102.0
+                2023-01-02,99.0,99.0,99.0,99.0
+                2023-01-03,98.0,97.0,96.0,96.0
+                """;
 
         InputStream inputStream = new ByteArrayInputStream(csvContent.getBytes());
 
@@ -116,9 +117,85 @@ public class StockProfitCalculatorServiceTest {
         StockPriceResourceObject result = stockProfitCalculatorService.maxProfit("AAPL", 2023);
 
         assertNotNull(result);
-        assertEquals(100.0, result.getBuyPrice(), 0.0001);
-        assertEquals(111.0, result.getSellPrice(), 0.0001);
-        assertEquals(11.0, result.getProfit(), 0.0001);
-        assertEquals("2023-01-03", result.getSellDate().toString());
+        assertEquals(96.0, result.getBuyPrice(), 0.0001);
+        assertNull(result.getSellDate());
+        assertNull(result.getSellPrice());
+        assertEquals(0.0, result.getProfit(), 0.0001);
     }
+
+    @Test
+    void testMaxProfitScenarioWithUpdatedBuyAfterFindingLowerPrice() throws Exception {
+        String csvContent = """
+                Date,Open,High,Low,Close
+                2023-01-01,100.0,105.0,99.0,102.0
+                2023-01-02,102.0,110.0,101.0,108.0
+                2023-01-03,103.0,115.0,90.0,103.0
+                2023-01-04,103.0,120.0,100.0,110.0
+                """;
+
+        InputStream inputStream = new ByteArrayInputStream(csvContent.getBytes());
+
+        Resource mockResource = mock(Resource.class);
+        when(mockResource.exists()).thenReturn(true);
+        when(mockResource.getInputStream()).thenReturn(inputStream);
+        when(resourceLoader.getResource(anyString())).thenReturn(mockResource);
+
+        StockPriceResourceObject result = stockProfitCalculatorService.maxProfit("AAPL", 2023);
+
+        assertNotNull(result);
+        assertEquals(90.0, result.getBuyPrice(), 0.0001);
+        assertEquals(120.0, result.getSellPrice(), 0.0001);
+        assertEquals(30.0, result.getProfit(), 0.0001);
+        assertEquals("2023-01-04", result.getSellDate().toString());
+    }
+
+    @Test
+    void testOnlyOneDayOfData() throws Exception {
+        // Test with only one day's worth of data
+        String csvContent = """
+                Date,Open,High,Low,Close
+                2023-01-01,100.0,105.0,99.0,102.0
+                """;
+
+        InputStream inputStream = new ByteArrayInputStream(csvContent.getBytes());
+
+        Resource mockResource = mock(Resource.class);
+        when(mockResource.exists()).thenReturn(true);
+        when(mockResource.getInputStream()).thenReturn(inputStream);
+        when(resourceLoader.getResource(anyString())).thenReturn(mockResource);
+
+        StockPriceResourceObject result = stockProfitCalculatorService.maxProfit("AAPL", 2023);
+
+        assertNotNull(result);
+        assertEquals(99.0, result.getBuyPrice(), 0.0001);
+        assertNull(result.getSellDate());
+        assertNull(result.getSellPrice());
+        assertEquals(0.0, result.getProfit(), 0.0001);
+    }
+
+    @Test
+    void testBuyAndSellOnConsecutiveDays() throws Exception {
+        String csvContent = """
+                Date,Open,High,Low,Close
+                2023-01-01,100.0,105.0,99.0,102.0
+                2023-01-02,102.0,110.0,101.0,108.0
+                """;
+
+        InputStream inputStream = new ByteArrayInputStream(csvContent.getBytes());
+
+        Resource mockResource = mock(Resource.class);
+        when(mockResource.exists()).thenReturn(true);
+        when(mockResource.getInputStream()).thenReturn(inputStream);
+        when(resourceLoader.getResource(anyString())).thenReturn(mockResource);
+
+        StockPriceResourceObject result = stockProfitCalculatorService.maxProfit("AAPL", 2023);
+
+        assertNotNull(result);
+        assertEquals(99.0, result.getBuyPrice(), 0.0001);
+        assertEquals(110.0, result.getSellPrice(), 0.0001);
+        assertEquals(11.0, result.getProfit(), 0.0001);
+        assertEquals("2023-01-02", result.getSellDate().toString());
+    }
+
+
 }
